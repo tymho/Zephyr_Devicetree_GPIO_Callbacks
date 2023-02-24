@@ -18,12 +18,19 @@
  * See the sample documentation for information on how to fix this.
  */
 static const struct gpio_dt_spec led = GPIO_DT_SPEC_GET(LED0_NODE, gpios);
+static const struct gpio_dt_spec sw0 = GPIO_DT_SPEC_GET(DT_ALIAS(sw0), gpios);
 
 void main(void)
 {
 	int ret;
 
+  if (!device_is_ready(sw0.port)) {
+    LOG_ERR("gpio0 interface not ready.");
+    return;
+  }
+
 	if (!device_is_ready(led.port)) {
+    LOG_ERR("gpio0 interface not ready.");
 		return;
 	}
 
