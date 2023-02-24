@@ -1,0 +1,35 @@
+// To get started, press Ctrl+Space (or Option+Esc) to bring up the completion menu and view the available nodes.
+
+// You can also use the buttons in the sidebar to perform actions on nodes.
+// Actions currently available include:
+
+// * Enabling / disabling the node
+// * Adding the bus to a bus
+// * Removing the node
+// * Connecting ADC channels
+
+// For more help, browse the DeviceTree documentation at https://docs.zephyrproject.org/latest/guides/dts/index.html
+// You can also visit the nRF DeviceTree extension documentation at https://nrfconnect.github.io/vscode-nrf-connect/devicetree/nrfdevicetree.html
+
+/ {
+  aliases {
+    heartbeat= &led0;
+    buzzer= &led1;
+    ivdrip= &led2;
+    alarm= &led3;
+    error= &led4;
+    sleep= &button0;
+    freq_up= &button1;
+    freq_down= &button2;
+    reset= &button3;
+  };
+};
+
+&gpio1 {
+  compatible = "gpio-leds,gpio-keys";
+  led4: led_4 {
+    gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
+    label = "Green LED 4";
+  };
+};
+
