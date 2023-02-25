@@ -17,7 +17,7 @@
     buzzer= &led1;
     ivdrip= &led2;
     alarm= &led3;
-    error= &led4;
+    // error= &led4;
     sleep= &button0;
     freq_up= &button1;
     freq_down= &button2;
