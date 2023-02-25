@@ -17,19 +17,20 @@
     buzzer= &led1;
     ivdrip= &led2;
     alarm= &led3;
-    // error= &led4;
-    sleep= &button0;
-    freq_up= &button1;
-    freq_down= &button2;
-    reset= &button3;
+    error= &led4;
+    button0= &button0;
+    button1= &button1;
+    button2= &button2;
+    button3= &button3;
+  };
+  leds {
+    compatible = "gpio-leds";
+    led4: led_4 {        
+      gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
+      label = "Green LED 4";
+    };
   };
 };
 
-&gpio1 {
-  compatible = "gpio-leds,gpio-keys";
-  led4: led_4 {
-    gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
-    label = "Green LED 4";
-  };
-};
+
 
