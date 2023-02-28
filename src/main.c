@@ -19,11 +19,7 @@ LOG_MODULE_REGISTER(Zephyr_Devicetree_GPIO_Callbacks,LOG_LEVEL_DBG);
 #define MIN_TIME_MS 100
 #define MAX_TIME_MS 2000
 
-/*
- * A build error on this line means your board is unsupported.
- * See the sample documentation for information on how to fix this.
- */
-
+/* LEDs */
 #define HB_NODE	DT_ALIAS(heartbeat)
 static const struct gpio_dt_spec hb = GPIO_DT_SPEC_GET(HB_NODE, gpios);
 
@@ -39,6 +35,7 @@ static const struct gpio_dt_spec alrm = GPIO_DT_SPEC_GET(ALRM_NODE, gpios);
 #define ERROR_NODE	DT_ALIAS(error)
 static const struct gpio_dt_spec errled = GPIO_DT_SPEC_GET(ERROR_NODE, gpios);
 
+/* Buttons */
 #define BUTTON0_NODE	DT_ALIAS(button0) 
 static const struct gpio_dt_spec butt0 = GPIO_DT_SPEC_GET(BUTTON0_NODE, gpios);
 
@@ -59,6 +56,7 @@ static int err_count = 0;
 static int sleep_count = 0;
 
 /* Callbacks */
+/* Decrease delay by 100 ms when pressed */
 void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   if (err_count == 1){
@@ -77,6 +75,7 @@ void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
 }
 static struct gpio_callback butt1_cb_data;
 
+/* Increase delay by 100 ms when pressed*/
 void button2_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   if (err_count == 1){
@@ -95,6 +94,7 @@ void button2_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
 }
 static struct gpio_callback butt2_cb_data;
 
+/* Resets everything to base state*/
 void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   inc_count = 0;
@@ -103,6 +103,7 @@ void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
 }
 static struct gpio_callback butt3_cb_data;
 
+/* Sleep and restores to before sleep*/
 void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   if (sleep_count == 0){
@@ -154,6 +155,7 @@ void main(void)
 {
   int err;
 
+  /**capture exit or error codes**/
   err = !device_is_ready(errled.port);
 	if (err) {
 		LOG_ERR("gpio1 interface not ready.");
@@ -221,25 +223,43 @@ void main(void)
 	}
   /* Setup callbacks */
   err = gpio_pin_interrupt_configure_dt(&butt0, GPIO_INT_EDGE_TO_ACTIVE );
+  if (err < 0) {
+    LOG_ERR("Cannot configure button0");
+		return;
+	}
   gpio_init_callback(&butt0_cb_data, button0_pressed, BIT(butt0.pin));
 	gpio_add_callback(butt0.port, &butt0_cb_data);
 
   err = gpio_pin_interrupt_configure_dt(&butt1, GPIO_INT_EDGE_TO_ACTIVE );
+  if (err < 0) {
+    LOG_ERR("Cannot configure button1");
+		return;
+	}
   gpio_init_callback(&butt1_cb_data, button1_pressed, BIT(butt1.pin));
 	gpio_add_callback(butt1.port, &butt1_cb_data);
 
   err = gpio_pin_interrupt_configure_dt(&butt2, GPIO_INT_EDGE_TO_ACTIVE );
+  if (err < 0) {
+    LOG_ERR("Cannot configure button2");
+		return;
+	}
   gpio_init_callback(&butt2_cb_data, button2_pressed, BIT(butt2.pin));
 	gpio_add_callback(butt2.port, &butt2_cb_data);
 
   err = gpio_pin_interrupt_configure_dt(&butt3, GPIO_INT_EDGE_TO_ACTIVE );
+  if (err < 0) {
+    LOG_ERR("Cannot configure button3");
+		return;
+	}
   gpio_init_callback(&butt3_cb_data, button3_pressed, BIT(butt3.pin));
 	gpio_add_callback(butt3.port, &butt3_cb_data);
 
 	while (1) {
-    int err;
+    /* Setup recurring heartbeat LED */
     gpio_pin_toggle_dt(&hb);
+    /* Toggle Action LEDs */
     toggle_leds();
+    /* Increment time depending on inputs */
     k_msleep(LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS);
 	}
 }
