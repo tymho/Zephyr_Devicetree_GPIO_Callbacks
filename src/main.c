@@ -56,6 +56,7 @@ static int err_count = 0;
 static int sleep_count = 0;
 
 /* Timers */
+//timer for heartbeat
 void fixed_hb(struct k_timer *heartbeats)
 {
   gpio_pin_toggle_dt(&hb);
@@ -63,6 +64,7 @@ void fixed_hb(struct k_timer *heartbeats)
 }
 K_TIMER_DEFINE(heartbeats, fixed_hb, NULL);
 
+//timer for action
 void fixed_action(struct k_timer *actions)
 {
   toggle_leds();
@@ -78,6 +80,7 @@ void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
     return;
   }
   if (LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS < MIN_TIME_MS){
+    k_timer_stop(&actions);    
     gpio_pin_set_dt(&bz, 0);
     gpio_pin_set_dt(&iv, 0);
     gpio_pin_set_dt(&alrm, 0);
@@ -86,6 +89,8 @@ void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
   }
   else{
     dec_count = dec_count + 1;
+    k_timer_stop(&actions);
+    k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
   }
 }
 static struct gpio_callback butt1_cb_data;
@@ -97,6 +102,7 @@ void button2_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
     return;
   }
   if (LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS > MAX_TIME_MS){
+    k_timer_stop(&actions);
     gpio_pin_set_dt(&bz, 0);
     gpio_pin_set_dt(&iv, 0);
     gpio_pin_set_dt(&alrm, 0);
@@ -105,6 +111,8 @@ void button2_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
   }
   else{
     inc_count = inc_count + 1;
+    k_timer_stop(&actions);
+    k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
   }
 }
 static struct gpio_callback butt2_cb_data;
@@ -115,6 +123,8 @@ void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
   inc_count = 0;
   dec_count = 0;
   err_count = 0;
+  k_timer_stop(&actions);
+  k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
 }
 static struct gpio_callback butt3_cb_data;
 
@@ -122,6 +132,7 @@ static struct gpio_callback butt3_cb_data;
 void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   if (sleep_count == 0){
+    k_timer_stop(&actions); 
     err_count = 1;
     sleep_count = 1;
     gpio_pin_set_dt(&bz, 0);
@@ -131,6 +142,8 @@ void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
   else {
     err_count = 0;
     sleep_count = 0;
+    k_timer_stop(&actions);
+    k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
   }
 }
 static struct gpio_callback butt0_cb_data;
@@ -272,13 +285,11 @@ void main(void)
   gpio_init_callback(&butt3_cb_data, button3_pressed, BIT(butt3.pin));
 	gpio_add_callback(butt3.port, &butt3_cb_data);
 
+  /*start timers*/
   k_timer_start(&heartbeats, K_MSEC(500), K_MSEC(500));
-
-	while (1) {
-    /* Setup recurring heartbeat LED */
-    /* Toggle Action LEDs */
-    toggle_leds();
-    /* Increment time depending on inputs */
-    k_msleep(LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS);
+  k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
+	
+  while (1) {
+    /* empty loop */
 	}
 }
