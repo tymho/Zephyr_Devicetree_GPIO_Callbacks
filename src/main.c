@@ -55,6 +55,21 @@ static int dec_count = 0;
 static int err_count = 0;
 static int sleep_count = 0;
 
+/* Timers */
+void fixed_hb(struct k_timer *heartbeats)
+{
+  gpio_pin_toggle_dt(&hb);
+  LOG_DBG("Hearbeat blinked");
+}
+K_TIMER_DEFINE(heartbeats, fixed_hb, NULL);
+
+void fixed_action(struct k_timer *actions)
+{
+  toggle_leds();
+  LOG_DBG("LED Toggling");
+}
+K_TIMER_DEFINE(actions, fixed_action, NULL);
+
 /* Callbacks */
 /* Decrease delay by 100 ms when pressed */
 void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
@@ -150,6 +165,9 @@ void toggle_leds()
     tog_count = tog_count + 1;
   }
 }
+
+//struct to store states of action leds and freq
+//everytime button is pressed, stop the previous timer and start a new timer with the new frequency
 
 void main(void)
 {
@@ -254,9 +272,10 @@ void main(void)
   gpio_init_callback(&butt3_cb_data, button3_pressed, BIT(butt3.pin));
 	gpio_add_callback(butt3.port, &butt3_cb_data);
 
+  k_timer_start(&heartbeats, K_MSEC(500), K_MSEC(500));
+
 	while (1) {
     /* Setup recurring heartbeat LED */
-    gpio_pin_toggle_dt(&hb);
     /* Toggle Action LEDs */
     toggle_leds();
     /* Increment time depending on inputs */
