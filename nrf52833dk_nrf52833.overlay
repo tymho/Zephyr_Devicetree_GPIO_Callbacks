@@ -13,6 +13,8 @@
 
 / {
   aliases {
+    vslow = &vslow;
+    vfast = &vfast;
     heartbeat= &led0;
     buzzer= &led1;
     ivdrip= &led2;
@@ -23,6 +25,9 @@
     button2= &button2;
     button3= &button3;
   };
+  zephyr,user {
+    io-channels = <&adc 0>, <&adc 1>; // need to "activate" these channels for IO usage
+  };
   leds {
     compatible = "gpio-leds";
     led4: led_4 {        
@@ -30,6 +35,28 @@
       label = "Green LED 4";
     };
   };
+};
+&adc {
+  #address-cells = <1>;
+  #size-cells = <0>;
+
+  vslow: channel@0 {
+  reg = <0>; // channel number
+  zephyr,reference = "ADC_REF_INTERNAL"; // voltage ref for SA (0.6 V)
+  zephyr,gain = "ADC_GAIN_1_5"; // gain factor to scale ref voltage (1/gain)
+  zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+  zephyr,input-positive = <NRF_SAADC_AIN0>; // P0.02
+  zephyr,resolution = <8>; // bit depth
+  };
+  vfast: channel@1 {
+    reg = <1>; // channel number
+    zephyr,reference = "ADC_REF_VDD_1_4"; // voltage ref for SA (VDD)
+    zephyr,gain = "ADC_GAIN_1_5"; // gain factor to scale ref voltage (1/gain)
+    zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+    zephyr,input-positive = <NRF_SAADC_AIN1>; // P0.03
+    zephyr,resolution = <12>; // bit depth
+  };
+  status = "okay"; // enable the ADC
 };
 
 

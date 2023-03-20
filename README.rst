@@ -1,12 +1,10 @@
 .. _blinky-sample:
 
-Blinky
+Zephyr_Devicetree_GPIO_Callbacks
 ######
 
 Overview
 ********
-
-The Blinky sample blinks an LED forever using the :ref:`GPIO API <gpio_api>`.
 
 The source code shows how to:
 
