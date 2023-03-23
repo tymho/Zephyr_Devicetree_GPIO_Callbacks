@@ -65,9 +65,6 @@ static const struct gpio_dt_spec butt3 = GPIO_DT_SPEC_GET(BUTTON3_NODE, gpios);
 
 //global variables
 static float maxV = 3300;
-static int tog_count = 0;
-static int inc_count = 0;
-static int dec_count = 0;
 static int err_count = 0;
 static int sleep_count = 0;
 static int32_t val_mv_slow = 0;
@@ -81,14 +78,6 @@ void fixed_hb(struct k_timer *heartbeats)
   //LOG_DBG("Hearbeat blinked");
 }
 K_TIMER_DEFINE(heartbeats, fixed_hb, NULL);
-
-//timer for action
-// void fixed_action(struct k_timer *actions)
-// {
-//   toggle_leds();
-//   LOG_DBG("LED Toggling");
-// }
-// K_TIMER_DEFINE(actions, fixed_action, NULL);
 
 //timer for slower adc blink (sb)
 void fixed_sb(struct k_timer *sb_blink)
@@ -107,62 +96,14 @@ void fixed_fb(struct k_timer *fb_blink)
 K_TIMER_DEFINE(fb_blink, fixed_fb, NULL);
 
 /* Callbacks */
-/* Decrease delay by 100 ms when pressed */
-// void button1_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-// {
-//   if (err_count == 1){
-//     return;
-//   }
-//   if (LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS < MIN_TIME_MS){
-//     k_timer_stop(&actions);    
-//     gpio_pin_set_dt(&bz, 0);
-//     gpio_pin_set_dt(&iv, 0);
-//     gpio_pin_set_dt(&alrm, 0);
-//     gpio_pin_set_dt(&errled, 1);
-//     err_count = 1;
-//   }
-//   else{
-//     dec_count = dec_count + 1;
-//     k_timer_stop(&actions);
-//     k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
-//   }
-// }
-// static struct gpio_callback butt1_cb_data;
-
-/* Increase delay by 100 ms when pressed*/
-// void button2_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
-// {
-//   if (err_count == 1){
-//     return;
-//   }
-//   if (LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS > MAX_TIME_MS){
-//     k_timer_stop(&actions);
-//     gpio_pin_set_dt(&bz, 0);
-//     gpio_pin_set_dt(&iv, 0);
-//     gpio_pin_set_dt(&alrm, 0);
-//     gpio_pin_set_dt(&errled, 1);
-//     err_count = 1;
-//   }
-//   else{
-//     inc_count = inc_count + 1;
-//     k_timer_stop(&actions);
-//     k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
-//   }
-// }
-// static struct gpio_callback butt2_cb_data;
-
 /* Resets everything to base state*/
 void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-  inc_count = 0;
-  dec_count = 0;
   err_count = 0;
   k_timer_stop(&sb_blink);
   k_timer_start(&sb_blink, K_MSEC(500), K_MSEC(500));
   k_timer_stop(&fb_blink);
   k_timer_start(&fb_blink, K_MSEC(500), K_MSEC(500));
-  // k_timer_stop(&actions);
-  // k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
 }
 static struct gpio_callback butt3_cb_data;
 
@@ -172,7 +113,6 @@ void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
   if (sleep_count == 0){
     k_timer_stop(&sb_blink);
     k_timer_stop(&fb_blink);
-    // k_timer_stop(&actions); 
     err_count = 1;
     sleep_count = 1;
     gpio_pin_set_dt(&bz, 0);
@@ -186,42 +126,9 @@ void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_
     k_timer_stop(&fb_blink);
     k_timer_start(&sb_blink, K_MSEC(500 - val_mv_slow/3300 * 100), K_MSEC(500 - val_mv_slow/3300 * 100));
     k_timer_start(&fb_blink, K_MSEC(500), K_MSEC(500));
-    // k_timer_stop(&actions);
-    // k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
   }
 }
 static struct gpio_callback butt0_cb_data;
-
-/**function to toggle action LEDs**/
-// void toggle_leds()
-// {
-//   if (err_count == 1) {
-//     gpio_pin_set_dt(&bz, 0);
-//     gpio_pin_set_dt(&iv, 0);
-//     gpio_pin_set_dt(&alrm, 0);
-//     gpio_pin_set_dt(&errled, 1);
-//     return;
-//   }
-//   if (tog_count == 0) {
-//     gpio_pin_set_dt(&bz, 1);
-//     gpio_pin_set_dt(&iv, 0);
-//     gpio_pin_set_dt(&alrm, 0);
-//   }
-//   if (tog_count == 1) {
-//     gpio_pin_set_dt(&bz, 0);
-//     gpio_pin_set_dt(&iv, 1);
-//     gpio_pin_set_dt(&alrm, 0);
-//   }
-//   if (tog_count == 2) {
-//     gpio_pin_set_dt(&bz, 0);
-//     gpio_pin_set_dt(&iv, 0);
-//     gpio_pin_set_dt(&alrm, 1);
-//     tog_count = 0;
-//   }
-//   else {
-//     tog_count = tog_count + 1;
-//   }
-// }
 
 //struct to store states of action leds and freq
 //everytime button is pressed, stop the previous timer and start a new timer with the new frequency
@@ -233,7 +140,7 @@ int32_t read_adc_val_slow()
     .buffer = &buf,
     .buffer_size = sizeof(buf), // bytes
   };
-  //LOG_INF("Measuring %s (channel %d)... ", adc_vslow.dev->name, adc_vslow.channel_id);
+  LOG_INF("Measuring %s (channel %d)... ", adc_vslow.dev->name, adc_vslow.channel_id);
   (void)adc_sequence_init_dt(&adc_vslow, &sequence);
   int ret;
   ret = adc_read(adc_vslow.dev, &sequence);
@@ -248,7 +155,7 @@ int32_t read_adc_val_slow()
   if (ret < 0) {
     LOG_ERR("Buffer cannot be converted to mV; returning raw buffer value.");
   } else {
-    LOG_INF("ADC Value (mV): %d", val_mv);
+    LOG_INF("AIN0 ADC Value (mV): %d", val_mv);
   }
   return val_mv;
 }
@@ -276,7 +183,7 @@ int32_t read_adc_val_fast()
   if (ret < 0) {
     LOG_ERR("Buffer cannot be converted to mV; returning raw buffer value.");
   } else {
-    LOG_INF("ADC Value (mV): %d", val_mv);
+    LOG_INF("AIN1 ADC Value (mV): %d", val_mv);
   }
   return val_mv;
 }
@@ -369,18 +276,6 @@ void main(void)
 		return;
 	}
 
-  // err = gpio_pin_configure_dt(&butt1, GPIO_INPUT);
-	// if (err < 0) {
-  //   LOG_ERR("Cannot configure button1");
-	// 	return;
-	// }
-
-  // err = gpio_pin_configure_dt(&butt2, GPIO_INPUT);
-	// if (err < 0) {
-  //   LOG_ERR("Cannot configure button2");
-	// 	return;
-	// }
-
   err = gpio_pin_configure_dt(&butt3, GPIO_INPUT);
 	if (err < 0) {
     LOG_ERR("Cannot configure button3");
@@ -396,22 +291,6 @@ void main(void)
   gpio_init_callback(&butt0_cb_data, button0_pressed, BIT(butt0.pin));
 	gpio_add_callback(butt0.port, &butt0_cb_data);
 
-  // err = gpio_pin_interrupt_configure_dt(&butt1, GPIO_INT_EDGE_TO_ACTIVE );
-  // if (err < 0) {
-  //   LOG_ERR("Cannot configure button1");
-	// 	return;
-	// }
-  // gpio_init_callback(&butt1_cb_data, button1_pressed, BIT(butt1.pin));
-	// gpio_add_callback(butt1.port, &butt1_cb_data);
-
-  // err = gpio_pin_interrupt_configure_dt(&butt2, GPIO_INT_EDGE_TO_ACTIVE );
-  // if (err < 0) {
-  //   LOG_ERR("Cannot configure button2");
-	// 	return;
-	// }
-  // gpio_init_callback(&butt2_cb_data, button2_pressed, BIT(butt2.pin));
-	// gpio_add_callback(butt2.port, &butt2_cb_data);
-
   err = gpio_pin_interrupt_configure_dt(&butt3, GPIO_INT_EDGE_TO_ACTIVE );
   if (err < 0) {
     LOG_ERR("Cannot configure button3");
@@ -423,19 +302,16 @@ void main(void)
   /*start timers*/
   /*notes: cannot typecast int to float and cannot read */
   k_timer_start(&heartbeats, K_MSEC(500), K_MSEC(500));
-  //LOG_DBG("Periodfast: %d", read_adc_val_fast());
-  //  k_timer_start(&fb_blink, K_MSEC(100 - (float) val_mv_fast/3300 * 50), K_MSEC(100 - (float) val_mv_fast/3300 * 50));
-  // k_timer_start(&actions, K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)), K_MSEC((LED_ON_TIME_MS - dec_count*DEC_ON_TIME_MS + inc_count*INC_ON_TIME_MS)));
-	
+
   while (1) {
-    /* empty loop */
+    /* loop to sample voltage reading and blink LED */
     k_timer_start(&sb_blink, K_MSEC((int)slow_period_calc()), K_MSEC((int)slow_period_calc()));
     k_timer_start(&fb_blink, K_MSEC((int)fast_period_calc()), K_MSEC((int)fast_period_calc()));
     val_mv_slow = read_adc_val_slow();
     val_mv_fast = read_adc_val_fast();
-    LOG_DBG("Periodslow float: %f mV", (float) val_mv_slow);
-    LOG_DBG("Periodslow fraction: %f", (float) val_mv_slow / maxV);
-    LOG_DBG("Periodslow calc: %f", 500 - (float) val_mv_slow/maxV * 400);
+    // LOG_DBG("Periodslow float: %f mV", (float) val_mv_slow);
+    // LOG_DBG("Periodslow fraction: %f", (float) val_mv_slow / maxV);
+    // LOG_DBG("Periodslow calc: %f", 500 - (float) val_mv_slow/maxV * 400);
     k_msleep(3*1000);
     k_timer_stop(&sb_blink);
     k_timer_stop(&fb_blink);
