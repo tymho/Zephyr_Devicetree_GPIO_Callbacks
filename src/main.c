@@ -14,11 +14,10 @@
 LOG_MODULE_REGISTER(Zephyr_DPC,LOG_LEVEL_DBG);
 
 /* 1000 msec = 1 sec */
-#define LED_ON_TIME_MS 1000
-#define DEC_ON_TIME_MS 100
-#define INC_ON_TIME_MS 100
-#define MIN_TIME_MS 100
-#define MAX_TIME_MS 2000
+#define ONE_HZ 500
+#define FIVE_HZ 100
+#define ONE_TO_FIVE_DIFF_HZ 400
+#define FIVE_TO_TEN_DIFF_HZ 50
 
 #define ADC_DT_SPEC_GET_BY_ALIAS(node_id)                    \
 {                                                            \
@@ -65,7 +64,7 @@ static const struct gpio_dt_spec butt3 = GPIO_DT_SPEC_GET(BUTTON3_NODE, gpios);
 
 //global variables
 static float maxV = 3300;
-static int err_count = 0;
+static int dormant = 0;
 static int sleep_count = 0;
 static int32_t val_mv_slow = 0;
 static int32_t val_mv_fast = 0;
@@ -99,11 +98,12 @@ K_TIMER_DEFINE(fb_blink, fixed_fb, NULL);
 /* Resets everything to base state*/
 void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
-  err_count = 0;
+  k_timer_stop(&heartbeats);
   k_timer_stop(&sb_blink);
-  k_timer_start(&sb_blink, K_MSEC(500), K_MSEC(500));
   k_timer_stop(&fb_blink);
-  k_timer_start(&fb_blink, K_MSEC(500), K_MSEC(500));
+  k_timer_start(&heartbeats, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
+  k_timer_start(&sb_blink, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
+  k_timer_start(&fb_blink, K_MSEC(FIVE_HZ), K_MSEC(FIVE_HZ));
 }
 static struct gpio_callback butt3_cb_data;
 
@@ -111,30 +111,18 @@ static struct gpio_callback butt3_cb_data;
 void button0_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   if (sleep_count == 0){
-    k_timer_stop(&sb_blink);
-    k_timer_stop(&fb_blink);
-    err_count = 1;
     sleep_count = 1;
-    gpio_pin_set_dt(&bz, 0);
-    gpio_pin_set_dt(&iv, 0);
-    gpio_pin_set_dt(&alrm, 0);
   }
   else {
-    err_count = 0;
     sleep_count = 0;
-    k_timer_stop(&sb_blink);
-    k_timer_stop(&fb_blink);
-    k_timer_start(&sb_blink, K_MSEC(500 - val_mv_slow/3300 * 100), K_MSEC(500 - val_mv_slow/3300 * 100));
-    k_timer_start(&fb_blink, K_MSEC(500), K_MSEC(500));
   }
 }
 static struct gpio_callback butt0_cb_data;
 
-//struct to store states of action leds and freq
-//everytime button is pressed, stop the previous timer and start a new timer with the new frequency
+/* Read ADCs */
 int32_t read_adc_val_slow()
 {
-  /* Read adc */
+  /* Read adc channel 0*/
   int16_t buf;
   struct adc_sequence sequence = {
     .buffer = &buf,
@@ -162,7 +150,7 @@ int32_t read_adc_val_slow()
 
 int32_t read_adc_val_fast()
 {
-  /* Read adc */
+  /* Read adc channel 1*/
   int16_t buf;
   struct adc_sequence sequence = {
     .buffer = &buf,
@@ -190,16 +178,14 @@ int32_t read_adc_val_fast()
 
 float slow_period_calc()
 {
-  static float slow_freq = 500;
-  static float slow_freq_rang = 400;
-  return slow_freq - (float) val_mv_slow/maxV * slow_freq_rang;
+  //calculate the current period for LED3
+  return (float) ONE_HZ - (float) val_mv_slow/maxV * (float) ONE_TO_FIVE_DIFF_HZ;
 }
 
 float fast_period_calc()
 {
-  static float fast_freq = 100;
-  static float fast_freq_rang = 50;
-  return fast_freq - (float) val_mv_fast/maxV * fast_freq_rang;
+  //calculate the current period for LED2
+  return (float) FIVE_HZ - (float) val_mv_fast/maxV * (float) FIVE_TO_TEN_DIFF_HZ;
 }
 
 void main(void)
@@ -257,11 +243,11 @@ void main(void)
     return;
 	}
 
-  err = gpio_pin_configure_dt(&alrm, GPIO_OUTPUT_LOW);
-	if (err < 0) {
-		LOG_ERR("Cannot configure alarm led");
-    return;
-	}
+  // err = gpio_pin_configure_dt(&alrm, GPIO_OUTPUT_LOW);
+	// if (err < 0) {
+	// 	LOG_ERR("Cannot configure alarm led");
+  //   return;
+	// }
 
   err = gpio_pin_configure_dt(&errled, GPIO_OUTPUT_LOW);
 	if (err < 0) {
@@ -299,21 +285,28 @@ void main(void)
   gpio_init_callback(&butt3_cb_data, button3_pressed, BIT(butt3.pin));
 	gpio_add_callback(butt3.port, &butt3_cb_data);
 
-  /*start timers*/
-  /*notes: cannot typecast int to float and cannot read */
-  k_timer_start(&heartbeats, K_MSEC(500), K_MSEC(500));
+  /*start heartbeat timer*/
+  k_timer_start(&heartbeats, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
 
   while (1) {
     /* loop to sample voltage reading and blink LED */
-    k_timer_start(&sb_blink, K_MSEC((int)slow_period_calc()), K_MSEC((int)slow_period_calc()));
-    k_timer_start(&fb_blink, K_MSEC((int)fast_period_calc()), K_MSEC((int)fast_period_calc()));
-    val_mv_slow = read_adc_val_slow();
-    val_mv_fast = read_adc_val_fast();
-    // LOG_DBG("Periodslow float: %f mV", (float) val_mv_slow);
-    // LOG_DBG("Periodslow fraction: %f", (float) val_mv_slow / maxV);
-    // LOG_DBG("Periodslow calc: %f", 500 - (float) val_mv_slow/maxV * 400);
-    k_msleep(3*1000);
-    k_timer_stop(&sb_blink);
-    k_timer_stop(&fb_blink);
+    if (sleep_count == 0){
+      //start blinking of LED
+      k_timer_start(&sb_blink, K_MSEC((int)slow_period_calc()), K_MSEC((int)slow_period_calc()));
+      k_timer_start(&fb_blink, K_MSEC((int)fast_period_calc()), K_MSEC((int)fast_period_calc()));
+      //read voltage
+      val_mv_slow = read_adc_val_slow();
+      val_mv_fast = read_adc_val_fast();
+      k_msleep(3*1000); //3 second delay
+      //stop timer for reset
+      k_timer_stop(&sb_blink);
+      k_timer_stop(&fb_blink);
+    }
+    else {
+      //set LEDs to sleep
+      gpio_pin_set_dt(&bz, 0);
+      gpio_pin_set_dt(&iv, 0);
+      k_msleep(100); //0.1 second delay
+    }
 	}
 }
