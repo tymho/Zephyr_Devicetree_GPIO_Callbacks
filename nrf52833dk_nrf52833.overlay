@@ -24,6 +24,8 @@
     button1= &button1;
     button2= &button2;
     button3= &button3;
+    drv1 = &drv1;
+    drv2 = &drv2;
   };
   zephyr,user {
     io-channels = <&adc 0>, <&adc 1>; // need to "activate" these channels for IO usage
@@ -33,6 +35,17 @@
     led4: led_4 {        
       gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
       label = "Green LED 4";
+    };
+  };
+  pwm_motor {
+    compatible = "pwm-leds";
+    drv1: drv_1 {
+    pwms = < &pwm0 0 PWM_MSEC(1) PWM_POLARITY_INVERTED>; // 0 - channel
+    label = "MOTOR DRIVE 1";
+    };
+    drv2: drv_2 {
+    pwms = < &pwm0 1 PWM_MSEC(1) PWM_POLARITY_INVERTED>; // 1 - channel
+    label = "MOTOR DRIVE 2";
     };
   };
 };
@@ -57,6 +70,34 @@
     zephyr,resolution = <12>; // bit depth
   };
   status = "okay"; // enable the ADC
+};
+&pwm0 {
+  compatible = "nordic,nrf-pwm";
+  reg = <0x4001c000 0x1000>;
+  interrupts = <28 NRF_DEFAULT_IRQ_PRIORITY>;
+  status = "okay";
+  #pwm-cells = <3>;
+  pinctrl-0 = <&pwm0_default>;
+  pinctrl-1 = <&pwm0_sleep>;
+  pinctrl-names = "default", "sleep";
+};
+&pinctrl {
+  compatible = "nordic,nrf-pinctrl";
+  status = "okay";
+  pwm0_default: pwm0_default {
+    group1 {
+      psels = <NRF_PSEL(PWM_OUT0, 0, 15)>, // P0.15, channel 0
+      <NRF_PSEL(PWM_OUT1, 0, 14)>; // P0.14, channel 1
+      nordic,invert;
+    };
+  };
+  pwm0_sleep: pwm0_sleep {
+    group1 {
+      psels = <NRF_PSEL(PWM_OUT0, 0, 15)>, // P0.15, channel 0
+      <NRF_PSEL(PWM_OUT1, 0, 14)>; // P0.14, channel 1
+      low-power-enable;
+    };
+  };
 };
 
 

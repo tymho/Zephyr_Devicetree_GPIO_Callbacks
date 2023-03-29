@@ -4,12 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+// load in the Zephyr library
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/devicetree.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/adc.h>
+#include <zephyr/drivers/pwm.h>
 
 LOG_MODULE_REGISTER(Zephyr_DPC,LOG_LEVEL_DBG);
 
@@ -29,6 +31,7 @@ LOG_MODULE_REGISTER(Zephyr_DPC,LOG_LEVEL_DBG);
 #define DT_SPEC_AND_COMMA(node_id, prop, idx)                \
 	      ADC_DT_SPEC_GET_BY_IDX(node_id, idx),
 
+// define structs based on DT aliases
 /* ADC channels (specified in DT overlay) */
 static const struct adc_dt_spec adc_vslow = ADC_DT_SPEC_GET_BY_ALIAS(vslow);
 static const struct adc_dt_spec adc_vfast = ADC_DT_SPEC_GET_BY_ALIAS(vfast);
@@ -36,31 +39,28 @@ static const struct adc_dt_spec adc_vfast = ADC_DT_SPEC_GET_BY_ALIAS(vfast);
 /* LEDs */
 #define HB_NODE	DT_ALIAS(heartbeat)
 static const struct gpio_dt_spec hb = GPIO_DT_SPEC_GET(HB_NODE, gpios);
-
 #define BZ_NODE	DT_ALIAS(buzzer)
 static const struct gpio_dt_spec bz = GPIO_DT_SPEC_GET(BZ_NODE, gpios);
-
 #define IV_NODE	DT_ALIAS(ivdrip)
 static const struct gpio_dt_spec iv = GPIO_DT_SPEC_GET(IV_NODE, gpios);
-
 #define ALRM_NODE	DT_ALIAS(alarm)
 static const struct gpio_dt_spec alrm = GPIO_DT_SPEC_GET(ALRM_NODE, gpios);
-
 #define ERROR_NODE	DT_ALIAS(error)
 static const struct gpio_dt_spec errled = GPIO_DT_SPEC_GET(ERROR_NODE, gpios);
 
 /* Buttons */
 #define BUTTON0_NODE	DT_ALIAS(button0) 
 static const struct gpio_dt_spec butt0 = GPIO_DT_SPEC_GET(BUTTON0_NODE, gpios);
-
 #define BUTTON1_NODE	DT_ALIAS(button1) 
 static const struct gpio_dt_spec butt1 = GPIO_DT_SPEC_GET(BUTTON1_NODE, gpios);
-
 #define BUTTON2_NODE	DT_ALIAS(button2) 
 static const struct gpio_dt_spec butt2 = GPIO_DT_SPEC_GET(BUTTON2_NODE, gpios);
-
 #define BUTTON3_NODE	DT_ALIAS(button3) 
 static const struct gpio_dt_spec butt3 = GPIO_DT_SPEC_GET(BUTTON3_NODE, gpios);
+
+/* PWM */
+static const struct pwm_dt_spec mtr_drv1 = PWM_DT_SPEC_GET(DT_ALIAS(drv1));
+static const struct pwm_dt_spec mtr_drv2 = PWM_DT_SPEC_GET(DT_ALIAS(drv2));
 
 //global variables
 static float maxV = 3300;
@@ -68,42 +68,43 @@ static int dormant = 0;
 static int sleep_count = 0;
 static int32_t val_mv_slow = 0;
 static int32_t val_mv_fast = 0;
+static float saw[20] = {0, 0.05, 0.1 , 0.15, 0.2 , 0.25, 0.3 , 0.35, 0.4 , 0.45, 0.5 ,
+       0.55, 0.6 , 0.65, 0.7 , 0.75, 0.8 , 0.85, 0.9 , 0.95};
+static int func_ind = 0;
+static float func_val = 0;
+static float func_hz = 0;
 
 /* Timers */
 //timer for heartbeat
 void fixed_hb(struct k_timer *heartbeats)
 {
   gpio_pin_toggle_dt(&hb);
-  //LOG_DBG("Hearbeat blinked");
 }
 K_TIMER_DEFINE(heartbeats, fixed_hb, NULL);
 
-//timer for slower adc blink (sb)
-void fixed_sb(struct k_timer *sb_blink)
+//timer for LED3
+void mod_led3(struct k_timer *pwmled)
 {
-  gpio_pin_toggle_dt(&iv);
-  //LOG_DBG("LED3 blinked");
+  if (func_ind == 19) {
+    func_ind = 0;
+  }
+  else {
+    func_ind += 1;
+  }
+  int err;
+  err = pwm_set_pulse_dt(&mtr_drv2, mtr_drv2.period * saw[func_ind]); // % duty cycle based on ADC1 reading    
+  if (err) {
+    LOG_ERR("Could not set motor driver 2 (PWM1)");
+  }
 }
-K_TIMER_DEFINE(sb_blink, fixed_sb, NULL);
-
-//timer for faster adc blink (fb)
-void fixed_fb(struct k_timer *fb_blink)
-{
-  gpio_pin_toggle_dt(&bz);
-  //LOG_DBG("LED2 blinked");
-}
-K_TIMER_DEFINE(fb_blink, fixed_fb, NULL);
+K_TIMER_DEFINE(pwmled, mod_led3, NULL);
 
 /* Callbacks */
 /* Resets everything to base state*/
 void button3_pressed(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
 {
   k_timer_stop(&heartbeats);
-  k_timer_stop(&sb_blink);
-  k_timer_stop(&fb_blink);
   k_timer_start(&heartbeats, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
-  k_timer_start(&sb_blink, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
-  k_timer_start(&fb_blink, K_MSEC(FIVE_HZ), K_MSEC(FIVE_HZ));
 }
 static struct gpio_callback butt3_cb_data;
 
@@ -211,6 +212,11 @@ void main(void)
     return;
   }
 
+  if (!device_is_ready(mtr_drv1.dev)) {
+    LOG_ERR("PWM device %s is not ready.", mtr_drv1.dev->name);
+    return -1;
+  }
+
   /* Setup ADCs */
   err = adc_channel_setup_dt(&adc_vslow);
   if (err < 0) {
@@ -242,12 +248,6 @@ void main(void)
 		LOG_ERR("Cannot configure ivdrip led");
     return;
 	}
-
-  // err = gpio_pin_configure_dt(&alrm, GPIO_OUTPUT_LOW);
-	// if (err < 0) {
-	// 	LOG_ERR("Cannot configure alarm led");
-  //   return;
-	// }
 
   err = gpio_pin_configure_dt(&errled, GPIO_OUTPUT_LOW);
 	if (err < 0) {
@@ -285,22 +285,26 @@ void main(void)
   gpio_init_callback(&butt3_cb_data, button3_pressed, BIT(butt3.pin));
 	gpio_add_callback(butt3.port, &butt3_cb_data);
 
-  /*start heartbeat timer*/
+  /*start timer*/
   k_timer_start(&heartbeats, K_MSEC(ONE_HZ), K_MSEC(ONE_HZ));
 
   while (1) {
     /* loop to sample voltage reading and blink LED */
     if (sleep_count == 0){
-      //start blinking of LED
-      k_timer_start(&sb_blink, K_MSEC((int)slow_period_calc()), K_MSEC((int)slow_period_calc()));
-      k_timer_start(&fb_blink, K_MSEC((int)fast_period_calc()), K_MSEC((int)fast_period_calc()));
       //read voltage
       val_mv_slow = read_adc_val_slow();
       val_mv_fast = read_adc_val_fast();
+      //modulate LED3 brightness
+      err = pwm_set_pulse_dt(&mtr_drv1, mtr_drv1.period * (float) val_mv_slow / maxV); // % duty cycle based on ADC0 reading
+      if (err) {
+        LOG_ERR("Could not set motor driver 1 (PWM0)");
+      }
+      //calculate sawtooth hz based on adc channel 1
+      float adchz = 10 - 5 * (float) val_mv_fast / maxV;
+      k_timer_start(&pwmled, K_MSEC(adchz), K_MSEC(adchz));
+
       k_msleep(3*1000); //3 second delay
-      //stop timer for reset
-      k_timer_stop(&sb_blink);
-      k_timer_stop(&fb_blink);
+      k_timer_stop(&pwmled);
     }
     else {
       //set LEDs to sleep
