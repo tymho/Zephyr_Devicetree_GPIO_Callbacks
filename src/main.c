@@ -83,21 +83,24 @@ void fixed_hb(struct k_timer *heartbeats)
 K_TIMER_DEFINE(heartbeats, fixed_hb, NULL);
 
 //timer for LED3
-void mod_led3(struct k_timer *pwmled)
+void mod_led2(struct k_timer *pwmled)
 {
   if (func_ind == 19) {
+    //reset indexing of lookup table if at end of tooth
     func_ind = 0;
   }
   else {
+    //else increment the table values
     func_ind += 1;
   }
   int err;
+  //modulate PWM based on table value
   err = pwm_set_pulse_dt(&mtr_drv2, mtr_drv2.period * saw[func_ind]); // % duty cycle based on ADC1 reading    
   if (err) {
     LOG_ERR("Could not set motor driver 2 (PWM1)");
   }
 }
-K_TIMER_DEFINE(pwmled, mod_led3, NULL);
+K_TIMER_DEFINE(pwmled, mod_led2, NULL);
 
 /* Callbacks */
 /* Resets everything to base state*/
@@ -177,18 +180,6 @@ int32_t read_adc_val_fast()
   return val_mv;
 }
 
-float slow_period_calc()
-{
-  //calculate the current period for LED3
-  return (float) ONE_HZ - (float) val_mv_slow/maxV * (float) ONE_TO_FIVE_DIFF_HZ;
-}
-
-float fast_period_calc()
-{
-  //calculate the current period for LED2
-  return (float) FIVE_HZ - (float) val_mv_fast/maxV * (float) FIVE_TO_TEN_DIFF_HZ;
-}
-
 void main(void)
 {
   int err;
@@ -249,12 +240,6 @@ void main(void)
     return;
 	}
 
-  err = gpio_pin_configure_dt(&errled, GPIO_OUTPUT_LOW);
-	if (err < 0) {
-		LOG_ERR("Cannot configure error led");
-    return;
-	}
-
   /* Setup buttons */
   err = gpio_pin_configure_dt(&butt0, GPIO_INPUT);
 	if (err < 0) {
@@ -291,16 +276,19 @@ void main(void)
   while (1) {
     /* loop to sample voltage reading and blink LED */
     if (sleep_count == 0){
-      //read voltage
+      //read voltage of channel 0 and 1
       val_mv_slow = read_adc_val_slow();
       val_mv_fast = read_adc_val_fast();
-      //modulate LED3 brightness
+
+      //modulate LED3 brightness based on adc channel 0 voltage
       err = pwm_set_pulse_dt(&mtr_drv1, mtr_drv1.period * (float) val_mv_slow / maxV); // % duty cycle based on ADC0 reading
       if (err) {
         LOG_ERR("Could not set motor driver 1 (PWM0)");
       }
-      //calculate sawtooth hz based on adc channel 1
+
+      //calculate sawtooth hz based on adc channel 1 voltage
       float adchz = 10 - 5 * (float) val_mv_fast / maxV;
+      //start timer for LED2 brightness
       k_timer_start(&pwmled, K_MSEC(adchz), K_MSEC(adchz));
 
       k_msleep(3*1000); //3 second delay
